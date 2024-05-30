@@ -4,7 +4,12 @@ class Task {
   DateTime deadline;
   bool isCompleted;
 
-  Task({this.id, required this.title, required this.deadline, this.isCompleted = false});
+  Task({
+    this.id,
+    required this.title,
+    required this.deadline,
+    this.isCompleted = false,
+  });
 
   Map<String, dynamic> toMap() {
     return {
@@ -21,6 +26,20 @@ class Task {
       title: map['title'],
       deadline: DateTime.parse(map['deadline']),
       isCompleted: map['isCompleted'] == 1,
+    );
+  }
+
+  Task copyWith({
+    int? id,
+    String? title,
+    DateTime? deadline,
+    bool? isCompleted,
+  }) {
+    return Task(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      deadline: deadline ?? this.deadline,
+      isCompleted: isCompleted ?? this.isCompleted,
     );
   }
 }

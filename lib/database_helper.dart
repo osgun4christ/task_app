@@ -4,117 +4,92 @@ import 'package:sqflite/sqflite.dart';
 import 'models/task.dart';
 
 class DatabaseHelper {
-  static final DatabaseHelper instance = DatabaseHelper._instance();
-  static Database? _db;
+  static const _databaseName = "TaskDatabase.db";
+  static const _databaseVersion = 1;
 
-  DatabaseHelper._instance();
+  DatabaseHelper._privateConstructor();
+  static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
 
-  String taskTable = 'task_table';
-  String colId = 'id';
-  String colTitle = 'title';
-  String colDeadline = 'deadline';
-  String colIsCompleted = 'isCompleted';
+  static Database? _database;
 
-  Future<Database> get db async {
-    _db ??= await _initDb();
-    return _db!;
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDatabase();
+    return _database!;
   }
 
-  Future<Database> _initDb() async {
-    final dbPath = await getDatabasesPath();
-    final path = join(dbPath, 'task.db');
-
-    return await openDatabase(path, version: 1, onCreate: _createDb);
-  }
-
-  void _createDb(Database db, int version) async {
-    await db.execute(
-      'CREATE TABLE $taskTable($colId INTEGER PRIMARY KEY AUTOINCREMENT, $colTitle TEXT, $colDeadline TEXT, $colIsCompleted INTEGER)',
+  _initDatabase() async {
+    String path = join(await getDatabasesPath(), _databaseName);
+    return await openDatabase(
+      path,
+      version: _databaseVersion,
+      onCreate: _onCreate,
     );
   }
 
-  Future<List<Map<String, dynamic>>> getTaskMapList() async {
-    Database db = await this.db;
-    final List<Map<String, dynamic>> result = await db.query(taskTable);
-    return result;
-  }
-
-  Future<List<Task>> getTaskList() async {
-    final List<Map<String, dynamic>> taskMapList = await getTaskMapList();
-    final List<Task> taskList = [];
-    for (var taskMap in taskMapList) {
-      taskList.add(Task.fromMap(taskMap));
-    }
-    return taskList;
+  Future _onCreate(Database db, int version) async {
+    await db.execute('''
+          CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY,
+            title TEXT NOT NULL,
+            deadline TEXT NOT NULL,
+            isCompleted INTEGER NOT NULL
+          )
+          ''');
   }
 
   Future<int> insertTask(Task task) async {
-    Database db = await this.db;
-    final int result = await db.insert(taskTable, task.toMap());
-    return result;
+    Database db = await instance.database;
+    return await db.insert('tasks', task.toMap());
   }
 
-  Future<int> updateTask(Task task) async {
-    Database db = await this.db;
-    final int result = await db.update(
-      taskTable,
-      task.toMap(),
-      where: '$colId = ?',
-      whereArgs: [task.id],
-    );
-    return result;
-  }
-
-  Future<int> deleteTask(int id) async {
-    Database db = await this.db;
-    final int result = await db.delete(
-      taskTable,
-      where: '$colId = ?',
-      whereArgs: [id],
-    );
-    return result;
+  Future<List<Task>> getTaskList() async {
+    Database db = await instance.database;
+    var tasks = await db.query('tasks', orderBy: "isCompleted ASC, deadline ASC");
+    List<Task> taskList = tasks.isNotEmpty
+        ? tasks.map((task) => Task.fromMap(task)).toList()
+        : [];
+    return taskList;
   }
 
   Future<List<Task>> getCompletedTasks() async {
-    Database db = await this.db;
-    final List<Map<String, dynamic>> result = await db.query(
-      taskTable,
-      where: '$colIsCompleted = ?',
-      whereArgs: [1],
-    );
-    final List<Task> taskList = [];
-    for (var taskMap in result) {
-      taskList.add(Task.fromMap(taskMap));
-    }
+    Database db = await instance.database;
+    var tasks = await db.query('tasks', where: "isCompleted = ?", whereArgs: [1], orderBy: "deadline DESC");
+    List<Task> taskList = tasks.isNotEmpty
+        ? tasks.map((task) => Task.fromMap(task)).toList()
+        : [];
     return taskList;
   }
 
-  Future<List<Task>> getIncompleteTasks() async {
-    Database db = await this.db;
-    final List<Map<String, dynamic>> result = await db.query(
-      taskTable,
-      where: '$colIsCompleted = ?',
-      whereArgs: [0],
+  Future<List<Task>> getTasksByDate(DateTime date) async {
+    Database db = await instance.database;
+    var tasks = await db.query(
+      'tasks',
+      where: "deadline = ?",
+      whereArgs: [date.toIso8601String()],
     );
-    final List<Task> taskList = [];
-    for (var taskMap in result) {
-      taskList.add(Task.fromMap(taskMap));
-    }
+    List<Task> taskList = tasks.isNotEmpty
+        ? tasks.map((task) => Task.fromMap(task)).toList()
+        : [];
     return taskList;
   }
 
-  Future<List<Task>> getTasksForDate(DateTime date) async {
-    Database db = await this.db;
-    final String formattedDate = date.toIso8601String().substring(0, 10); // YYYY-MM-DD
-    final List<Map<String, dynamic>> result = await db.query(
-      taskTable,
-      where: '$colDeadline LIKE ?',
-      whereArgs: ['$formattedDate%'],
+  Future<int> updateTask(Task task) async {
+    Database db = await instance.database;
+    return await db.update(
+      'tasks',
+      task.toMap(),
+      where: "id = ?",
+      whereArgs: [task.id],
     );
-    final List<Task> taskList = [];
-    for (var taskMap in result) {
-      taskList.add(Task.fromMap(taskMap));
-    }
-    return taskList;
+  }
+
+  Future<int> deleteTask(int id) async {
+    Database db = await instance.database;
+    return await db.delete(
+      'tasks',
+      where: "id = ?",
+      whereArgs: [id],
+    );
   }
 }
