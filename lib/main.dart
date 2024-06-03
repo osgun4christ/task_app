@@ -3,18 +3,39 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'screens/task_list_screen.dart';
-import 'screens/user_name_screen.dart';
+import 'screens/flash_screen.dart';
 
-void main() {
+// Define the background notification handler as a top-level function
+void backgroundNotificationHandler(NotificationResponse notificationResponse) {
+  // Handle the background notification response here
+  print('Background notification received: ${notificationResponse.payload}');
+}
+
+Future<void> main() async{
   tz.initializeTimeZones();
   runApp(TaskApp());
 }
 
 class TaskApp extends StatelessWidget {
-  final FlutterLocalNotificationsPlugin _flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  TaskApp({super.key});
+  TaskApp({super.key}){
+    _initializeNotifications();
+  }
 
+  Future<void> _initializeNotifications() async {
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+
+    await _notificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        // Handle the notification response here (if app is in foreground)
+        print('Foreground notification received: ${response.payload}');
+      },
+      onDidReceiveBackgroundNotificationResponse: backgroundNotificationHandler, // Register the background handler
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -22,6 +43,7 @@ class TaskApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.purple,
       ),
+      debugShowCheckedModeBanner: false,
       home: FutureBuilder<bool>(
         future: _isUserNameSet(),
         builder: (context, snapshot) {
@@ -30,12 +52,12 @@ class TaskApp extends StatelessWidget {
           } else {
             if (snapshot.data == true) {
               return TaskListScreen(
-                notificationsPlugin: _flutterLocalNotificationsPlugin,
+                notificationsPlugin: _notificationsPlugin,
                 initialDate: DateTime.now(),
               );
             } else {
-              return UserNameScreen(
-                notificationsPlugin: _flutterLocalNotificationsPlugin,
+              return FlashScreen(
+                notificationsPlugin: _notificationsPlugin,
               );
             }
           }

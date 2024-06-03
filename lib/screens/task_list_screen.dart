@@ -1,22 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:task_app/screens/calendar_screen.dart';
+import 'package:task_app/screens/history_screen.dart';
+//import 'package:task_app/screens/history_screen.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../database_helper.dart';
 import '../models/task.dart';
 
 class TaskListScreen extends StatefulWidget {
-  //final FlutterLocalNotificationsPlugin notificationsPlugin;
-  final FlutterLocalNotificationsPlugin notificationsPlugin =
-      FlutterLocalNotificationsPlugin();
-
+  final FlutterLocalNotificationsPlugin notificationsPlugin;
   final DateTime initialDate;
 
-  //TaskListScreen({super.key, required this.notificationsPlugin, required this.initialDate});
-  TaskListScreen(
-      {super.key,
-      required this.initialDate,
-      required FlutterLocalNotificationsPlugin notificationsPlugin});
+  const TaskListScreen(
+      {super.key, required this.initialDate, required this.notificationsPlugin});
 
   @override
   // ignore: library_private_types_in_public_api
@@ -25,15 +22,15 @@ class TaskListScreen extends StatefulWidget {
 
 class _TaskListScreenState extends State<TaskListScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
-  late List<Task> _taskList = [];
-  final String _userName =
-      "Samuel"; // Static for simplicity, you can make this dynamic
+  late List<AppTask> _taskList = [];
+  final String _userName = "Samuel"; // Static for simplicity, you can make this dynamic
   late String _currentDate;
 
   @override
   void initState() {
     super.initState();
     _initializeNotifications();
+    _archiveOldCompletedTasks();
     _updateTaskList();
     _currentDate = _getCurrentDate(widget.initialDate);
   }
@@ -47,10 +44,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
         AndroidInitializationSettings('@mipmap/ic_launcher');
     const InitializationSettings initializationSettings =
         InitializationSettings(android: initializationSettingsAndroid);
-    await widget.notificationsPlugin.initialize(initializationSettings);
+    await widget.notificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        // handle the notification response
+      },
+      onDidReceiveBackgroundNotificationResponse:
+          (NotificationResponse response) {
+        // handle the background notification response
+      },
+    );
   }
 
-  Future<void> _scheduleNotification(Task task) async {
+  Future<void> _scheduleNotification(AppTask task) async {
     await widget.notificationsPlugin.zonedSchedule(
       task.id!,
       'Task Reminder',
@@ -70,15 +76,37 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  void _updateTaskList() {
+    Future<void> _archiveOldCompletedTasks() async {
+    await _dbHelper.archiveOldCompletedTasks();
+  }
+
+void _updateTaskList() {
     _dbHelper.getTaskList().then((taskList) {
       setState(() {
-        _taskList = taskList;
+        _taskList = taskList.where((task) {
+          return !task.isCompleted || _isToday(task.deadline);
+        }).toList();
+        _taskList.sort((a, b) {
+          if (a.isCompleted != b.isCompleted) {
+            return a.isCompleted ? 1 : -1;
+          } else if (a.deadline != b.deadline) {
+            return a.deadline.isBefore(b.deadline) ? -1 : 1;
+          } else {
+            return 0;
+          }
+        });
       });
     });
   }
 
-  void _addOrEditTask(Task? task) {
+    bool _isToday(DateTime deadline) {
+    final now = DateTime.now();
+    return deadline.year == now.year &&
+           deadline.month == now.month &&
+           deadline.day == now.day;
+  }
+
+  void _addOrEditTask(AppTask? task) {
     final titleController = TextEditingController(text: task?.title);
 
     showModalBottomSheet(
@@ -86,8 +114,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       isScrollControlled: true,
       builder: (BuildContext context) {
         return Padding(
-          padding:
-              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           child: Container(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -101,52 +128,40 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 const SizedBox(height: 20.0),
                 ElevatedButton(
                   onPressed: () async {
-                    final DateTime? picked = await showDatePicker(
+                    final title = titleController.text;
+                    DateTime deadline = task?.deadline ?? DateTime.now();
+
+                    final DateTime? pickedDate = await showDatePicker(
                       context: context,
-                      initialDate: task?.deadline ?? DateTime.now(),
+                      initialDate: deadline,
                       firstDate: DateTime.now(),
                       lastDate: DateTime(DateTime.now().year + 5),
                     );
-                    if (picked != null) {
-                      final TimeOfDay? timePicked = await showTimePicker(
-                        // ignore: use_build_context_synchronously
-                        context: context,
-                        initialTime: TimeOfDay.now(),
-                      );
-                      if (timePicked != null) {
-                        setState(() {
-                          task?.deadline = DateTime(picked.year, picked.month,
-                              picked.day, timePicked.hour, timePicked.minute);
-                        });
-                      }
+
+                    if (pickedDate != null) {
+                      deadline = DateTime(pickedDate.year, pickedDate.month, pickedDate.day);
                     }
-                  },
-                  child: const Text('Select Deadline'),
-                ),
-                const SizedBox(height: 20.0),
-                ElevatedButton(
-                  onPressed: () {
-                    final title = titleController.text;
-                    final deadline = task?.deadline ?? DateTime.now();
 
                     if (task == null) {
-                      final newTask = Task(title: title, deadline: deadline);
+                      final newTask = AppTask(title: title, deadline: deadline);
                       _dbHelper.insertTask(newTask).then((_) {
                         _scheduleNotification(newTask);
                         _updateTaskList();
                       });
                     } else {
-                      final updatedTask = Task(
-                          id: task.id,
-                          title: title,
-                          deadline: deadline,
-                          isCompleted: task.isCompleted);
+                      final updatedTask = AppTask(
+                        id: task.id,
+                        title: title,
+                        deadline: deadline,
+                        isCompleted: task.isCompleted,
+                      );
                       _dbHelper.updateTask(updatedTask).then((_) {
                         _scheduleNotification(updatedTask);
                         _updateTaskList();
                       });
                     }
 
+                    // ignore: use_build_context_synchronously
                     Navigator.pop(context);
                   },
                   child: Text(task == null ? 'Add Task' : 'Edit Task'),
@@ -159,18 +174,19 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-  void _markAsCompleted(Task task) {
-    final updatedTask = Task(
-        id: task.id,
-        title: task.title,
-        deadline: task.deadline,
-        isCompleted: !task.isCompleted);
+  void _markAsCompleted(AppTask task) {
+    final updatedTask = AppTask(
+      id: task.id,
+      title: task.title,
+      deadline: task.deadline,
+      isCompleted: !task.isCompleted,
+    );
     _dbHelper.updateTask(updatedTask).then((_) {
       _updateTaskList();
     });
   }
 
-  void _deleteTask(Task task) {
+  void _deleteTask(AppTask task) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -202,19 +218,26 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void _showHistory() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const HistoryScreen()),
+      MaterialPageRoute(builder: (context) =>  const TaskHistoryScreen()),
     );
   }
 
   void _showCalendar() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const CalendarScreen()),
+      MaterialPageRoute(builder: (context) =>  CalendarScreen(notificationsPlugin: widget.notificationsPlugin,)),
     );
   }
 
   void _showAddTask() {
     _addOrEditTask(null);
+  }
+
+  bool _isExpired(DateTime deadline) {
+    final now = DateTime.now();
+    final deadlineDate = DateTime(deadline.year, deadline.month, deadline.day);
+    final todayDate = DateTime(now.year, now.month, now.day);
+    return deadlineDate.isBefore(todayDate);
   }
 
   @override
@@ -272,12 +295,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
                 return Card(
                   color: task.isCompleted
                       ? const Color.fromARGB(255, 212, 179, 242)
-                      : null,
+                      : _isExpired(task.deadline)
+                          ? const Color.fromARGB(255, 255, 173, 173) // Expired task color
+                          : null,
                   margin: const EdgeInsets.symmetric(
                       vertical: 8.0, horizontal: 16.0),
                   child: ListTile(
                     title: Text(task.title),
-                    subtitle: Text('Deadline: ${task.deadline}'),
+                    subtitle: Text('Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
                     trailing: Wrap(
                       spacing: 12, // space between two icons
                       children: <Widget>[
@@ -307,68 +332,70 @@ class _TaskListScreenState extends State<TaskListScreen> {
       ),
     );
   }
+
+  
 }
 
-class HistoryScreen extends StatelessWidget {
-  const HistoryScreen({super.key});
+// class HistoryScreen extends StatelessWidget {
+//   const HistoryScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Task History'),
-      ),
-      body: FutureBuilder<List<Task>>(
-        future: DatabaseHelper.instance.getCompletedTasks(),
-        builder: (BuildContext context, AsyncSnapshot<List<Task>> snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.data!.isEmpty) {
-            return const Center(child: Text('No completed tasks.'));
-          }
-          return ListView(
-            children: snapshot.data!.map((task) {
-              return ListTile(
-                title: Text(task.title),
-                subtitle: Text('Completed on: ${task.deadline}'),
-              );
-            }).toList(),
-          );
-        },
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text('Task History'),
+//       ),
+//       body: FutureBuilder<List<AppTask>>(
+//         future: DatabaseHelper.instance.getCompletedTasks(),
+//         builder: (BuildContext context, AsyncSnapshot<List<AppTask>> snapshot) {
+//           if (!snapshot.hasData) {
+//             return const Center(child: CircularProgressIndicator());
+//           }
+//           if (snapshot.data!.isEmpty) {
+//             return const Center(child: Text('No completed tasks.'));
+//           }
+//           return ListView(
+//             children: snapshot.data!.map((task) {
+//               return ListTile(
+//                 title: Text(task.title),
+//                 subtitle: Text('Completed on: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
+//               );
+//             }).toList(),
+//           );
+//         },
+//       ),
+//     );
+//   }
+// }
 
-class CalendarScreen extends StatelessWidget {
-  const CalendarScreen({super.key});
+// class CalendarScreen extends StatelessWidget {
+//   const CalendarScreen({super.key});
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Calendar'),
-      ),
-      body: FutureBuilder<List<Task>>(
-        future: DatabaseHelper.instance.getTaskList(),
-        builder: (BuildContext context, AsyncSnapshot<List<Task>> snapshot) {
-          if (!snapshot.hasData) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.data!.isEmpty) {
-            return const Center(child: Text('No tasks found.'));
-          }
-          return ListView(
-            children: snapshot.data!.map((task) {
-              return ListTile(
-                title: Text(task.title),
-                subtitle: Text('Deadline: ${task.deadline}'),
-              );
-            }).toList(),
-          );
-        },
-      ),
-    );
-  }
-}
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: const Text('Calendar'),
+//       ),
+//       body: FutureBuilder<List<AppTask>>(
+//         future: DatabaseHelper.instance.getTaskList(),
+//         builder: (BuildContext context, AsyncSnapshot<List<AppTask>> snapshot) {
+//           if (!snapshot.hasData) {
+//             return const Center(child: CircularProgressIndicator());
+//           }
+//           if (snapshot.data!.isEmpty) {
+//             return const Center(child: Text('No tasks found.'));
+//           }
+//           return ListView(
+//             children: snapshot.data!.map((task) {
+//               return ListTile(
+//                 title: Text(task.title),
+//                 subtitle: Text('Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
+//               );
+//             }).toList(),
+//           );
+//         },
+//       ),
+//     );
+//   }
+// }

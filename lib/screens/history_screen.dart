@@ -1,32 +1,52 @@
 import 'package:flutter/material.dart';
-import '../database_helper.dart'; // Import your database helper class
-import '../models/task.dart'; // Import your Task model class
+import 'package:intl/intl.dart';
+import '../database_helper.dart';
+import '../models/task.dart';
 
-class HistoryScreen extends StatelessWidget {
+class TaskHistoryScreen extends StatefulWidget {
+  const TaskHistoryScreen({super.key});
+
+  @override
+  // ignore: library_private_types_in_public_api
+  _TaskHistoryScreenState createState() => _TaskHistoryScreenState();
+}
+
+class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Task History'),
+        title: const Text('Task History'),
       ),
-      body: FutureBuilder<List<Task>>(
-        future: DatabaseHelper.instance.getCompletedTasks(),
-        builder: (BuildContext context, AsyncSnapshot<List<Task>> snapshot) {
+      body: FutureBuilder<List<AppTask>>(
+        future: _dbHelper .getCompletedTasks(),
+        builder: (BuildContext context, AsyncSnapshot<List<AppTask>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator());
           } else if (snapshot.hasError) {
             return Center(child: Text('Error: ${snapshot.error}'));
           } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return Center(child: Text('No completed tasks.'));
+            return const Center(child: Text('No completed tasks.'));
           } else {
+            final groupedTasks = _groupTasksByDay(snapshot.data!);
             return ListView.builder(
-              itemCount: snapshot.data!.length,
+              itemCount: groupedTasks.length,
               itemBuilder: (BuildContext context, int index) {
-                final task = snapshot.data![index];
-                return ListTile(
-                  title: Text(task.title),
-                  subtitle: Text('Completed on: ${task.deadline}'),
-                  // You can customize this ListTile as needed
+                final date = groupedTasks.keys.elementAt(index);
+                final tasks = groupedTasks[date]!;
+                return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+                  child: ExpansionTile(
+                    title: Text(DateFormat('yyyy-MM-dd').format(date)),
+                    children: tasks.map((task) {
+                      return ListTile(
+                        title: Text(task.title),
+                        subtitle: Text('Completed on: ${DateFormat('MMM d, y h:mm a').format(task.deadline)}'),
+                      );
+                    }).toList(),
+                  ),
                 );
               },
             );
@@ -34,5 +54,18 @@ class HistoryScreen extends StatelessWidget {
         },
       ),
     );
+  }
+
+  Map<DateTime, List<AppTask>> _groupTasksByDay(List<AppTask> tasks) {
+    final Map<DateTime, List<AppTask>> groupedTasks = {};
+    for (final task in tasks) {
+      final DateTime taskDate = DateTime(task.deadline.year, task.deadline.month, task.deadline.day);
+      if (groupedTasks[taskDate] == null) {
+        groupedTasks[taskDate] = [];
+      }
+      groupedTasks[taskDate]!.add(task);
+    }
+
+    return groupedTasks;
   }
 }

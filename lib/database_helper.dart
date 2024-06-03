@@ -1,95 +1,132 @@
 import 'dart:async';
-import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'models/task.dart';
+import 'package:path/path.dart';
+import '../models/task.dart';
 
 class DatabaseHelper {
-  static const _databaseName = "TaskDatabase.db";
-  static const _databaseVersion = 1;
-
-  DatabaseHelper._privateConstructor();
-  static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
+  static final DatabaseHelper instance = DatabaseHelper._init();
 
   static Database? _database;
 
+  DatabaseHelper._init();
+
   Future<Database> get database async {
     if (_database != null) return _database!;
-    _database = await _initDatabase();
+
+    _database = await _initDB('tasks.db');
     return _database!;
   }
 
-  _initDatabase() async {
-    String path = join(await getDatabasesPath(), _databaseName);
-    return await openDatabase(
-      path,
-      version: _databaseVersion,
-      onCreate: _onCreate,
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
+    return await openDatabase(path, version: 1, onCreate: _createDB);
+  }
+
+  Future _createDB(Database db, int version) async {
+    const taskTable = '''
+    CREATE TABLE tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      deadline TEXT NOT NULL,
+      isCompleted INTEGER NOT NULL
     );
-  }
+    ''';
 
-  Future _onCreate(Database db, int version) async {
-    await db.execute('''
-          CREATE TABLE tasks (
-            id INTEGER PRIMARY KEY,
-            title TEXT NOT NULL,
-            deadline TEXT NOT NULL,
-            isCompleted INTEGER NOT NULL
-          )
-          ''');
-  }
-
-  Future<int> insertTask(Task task) async {
-    Database db = await instance.database;
-    return await db.insert('tasks', task.toMap());
-  }
-
-  Future<List<Task>> getTaskList() async {
-    Database db = await instance.database;
-    var tasks = await db.query('tasks', orderBy: "isCompleted ASC, deadline ASC");
-    List<Task> taskList = tasks.isNotEmpty
-        ? tasks.map((task) => Task.fromMap(task)).toList()
-        : [];
-    return taskList;
-  }
-
-  Future<List<Task>> getCompletedTasks() async {
-    Database db = await instance.database;
-    var tasks = await db.query('tasks', where: "isCompleted = ?", whereArgs: [1], orderBy: "deadline DESC");
-    List<Task> taskList = tasks.isNotEmpty
-        ? tasks.map((task) => Task.fromMap(task)).toList()
-        : [];
-    return taskList;
-  }
-
-  Future<List<Task>> getTasksByDate(DateTime date) async {
-    Database db = await instance.database;
-    var tasks = await db.query(
-      'tasks',
-      where: "deadline = ?",
-      whereArgs: [date.toIso8601String()],
+    const archivedTaskTable = '''
+    CREATE TABLE archived_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      deadline TEXT NOT NULL,
+      isCompleted INTEGER NOT NULL
     );
-    List<Task> taskList = tasks.isNotEmpty
-        ? tasks.map((task) => Task.fromMap(task)).toList()
-        : [];
-    return taskList;
+    ''';
+
+    await db.execute(taskTable);
+    await db.execute(archivedTaskTable);
   }
 
-  Future<int> updateTask(Task task) async {
-    Database db = await instance.database;
-    return await db.update(
+  Future<void> moveToArchivedTasks(AppTask task) async {
+    final db = await instance.database;
+
+    await db.insert('archived_tasks', task.toJson());
+    await db.delete('tasks', where: 'id = ?', whereArgs: [task.id]);
+  }
+
+  Future<AppTask> insertTask(AppTask task) async {
+    final db = await instance.database;
+
+    final id = await db.insert('tasks', task.toJson());
+    return task.copyWith(id: id);
+  }
+
+  Future<List<AppTask>> getTaskList() async {
+    final db = await instance.database;
+
+    final result = await db.query('tasks');
+    return result.map((json) => AppTask.fromJson(json)).toList();
+  }
+
+  Future<void> updateTask(AppTask task) async {
+    final db = await instance.database;
+
+    await db.update(
       'tasks',
-      task.toMap(),
-      where: "id = ?",
+      task.toJson(),
+      where: 'id = ?',
       whereArgs: [task.id],
     );
   }
 
-  Future<int> deleteTask(int id) async {
-    Database db = await instance.database;
-    return await db.delete(
+  Future<void> deleteTask(int id) async {
+    final db = await instance.database;
+
+    await db.delete(
       'tasks',
-      where: "id = ?",
+      where: 'id = ?',
       whereArgs: [id],
     );
+  }
+
+ Future<void> archiveOldCompletedTasks() async {
+    final db = await instance.database;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Fetch all completed tasks
+    final completedTasks = await db.query(
+      'tasks',
+      where: 'isCompleted = ?',
+      whereArgs: [1],
+    );
+
+    // Move tasks with a deadline before today to the archived_tasks table
+    for (var taskJson in completedTasks) {
+      final task = AppTask.fromJson(taskJson);
+      final taskDeadline = DateTime.parse(task.deadline as String);
+
+      if (taskDeadline.isBefore(today)) {
+        await moveToArchivedTasks(task);
+      }
+    }
+  }
+
+  Future<List<AppTask>> getCompletedTasks() async {
+    final db = await instance.database;
+
+    final result = await db.query(
+      'archived_tasks',
+      orderBy: 'deadline DESC',
+    );
+    print('Fetched completed tasks: $result'); // Logging for verification
+    return result.map((json) => AppTask.fromJson(json)).toList();
+  }
+
+  Future close() async {
+    final db = await instance.database;
+
+    db.close();
   }
 }
