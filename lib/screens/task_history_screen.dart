@@ -12,7 +12,6 @@ class TaskHistoryScreen extends StatefulWidget {
 
 class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
-    List<AppTask> _completedTasks = [];
 
   @override
   void initState() {
@@ -23,7 +22,6 @@ class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
   void _loadCompletedTasks() {
     _dbHelper.getCompletedTasks().then((taskList) {
       setState(() {
-        _completedTasks = taskList;
       });
     });
   }
