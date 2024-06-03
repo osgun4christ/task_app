@@ -29,6 +29,7 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_native_splash: ^2.2.16
 
 
   flutter_lints: ^4.0.0
@@ -40,9 +41,15 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/taskapp.png
+
+flutter_native_splash:
+  color: "#fff"  # Set your desired background color
+  image: assets/taskapp.png
+  android: true
+  ios: true
+
 
   #   - family: Schyler
   #     fonts:

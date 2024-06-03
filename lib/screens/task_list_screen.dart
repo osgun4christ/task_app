@@ -13,7 +13,9 @@ class TaskListScreen extends StatefulWidget {
   final DateTime initialDate;
 
   const TaskListScreen(
-      {super.key, required this.initialDate, required this.notificationsPlugin});
+      {super.key,
+      required this.initialDate,
+      required this.notificationsPlugin});
 
   @override
   // ignore: library_private_types_in_public_api
@@ -23,7 +25,8 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   late List<AppTask> _taskList = [];
-  final String _userName = "Samuel"; // Static for simplicity, you can make this dynamic
+  final String _userName =
+      "Samuel"; // Static for simplicity, you can make this dynamic
   late String _currentDate;
 
   @override
@@ -76,11 +79,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 
-    Future<void> _archiveOldCompletedTasks() async {
+  Future<void> _archiveOldCompletedTasks() async {
     await _dbHelper.archiveOldCompletedTasks();
   }
 
-void _updateTaskList() {
+  void _updateTaskList() {
     _dbHelper.getTaskList().then((taskList) {
       setState(() {
         _taskList = taskList.where((task) {
@@ -99,11 +102,11 @@ void _updateTaskList() {
     });
   }
 
-    bool _isToday(DateTime deadline) {
+  bool _isToday(DateTime deadline) {
     final now = DateTime.now();
     return deadline.year == now.year &&
-           deadline.month == now.month &&
-           deadline.day == now.day;
+        deadline.month == now.month &&
+        deadline.day == now.day;
   }
 
   void _addOrEditTask(AppTask? task) {
@@ -114,7 +117,8 @@ void _updateTaskList() {
       isScrollControlled: true,
       builder: (BuildContext context) {
         return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding:
+              EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
           child: Container(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -139,7 +143,8 @@ void _updateTaskList() {
                     );
 
                     if (pickedDate != null) {
-                      deadline = DateTime(pickedDate.year, pickedDate.month, pickedDate.day);
+                      deadline = DateTime(
+                          pickedDate.year, pickedDate.month, pickedDate.day);
                     }
 
                     if (task == null) {
@@ -218,14 +223,17 @@ void _updateTaskList() {
   void _showHistory() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) =>  const TaskHistoryScreen()),
+      MaterialPageRoute(builder: (context) => const TaskHistoryScreen()),
     );
   }
 
   void _showCalendar() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) =>  CalendarScreen(notificationsPlugin: widget.notificationsPlugin,)),
+      MaterialPageRoute(
+          builder: (context) => CalendarScreen(
+                notificationsPlugin: widget.notificationsPlugin,
+              )),
     );
   }
 
@@ -257,14 +265,25 @@ void _updateTaskList() {
         ],
       ),
       drawer: Drawer(
+        width: MediaQuery.of(context).size.width * 0.65, // Adjust the width as needed
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            const DrawerHeader(
-              decoration: BoxDecoration(
+            DrawerHeader(
+              decoration: const BoxDecoration(
                 color: Color.fromARGB(255, 159, 118, 210),
               ),
-              child: Text('Menu'),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0), // Add padding as needed
+                child: SizedBox(
+                  width: 5,
+                  height: 5,
+                  child: Image.asset(
+                    'assets/taskapp.png',
+                    fit: BoxFit.contain,
+                  ), // Adjust the width as needed
+                ),
+              ),
             ),
             ListTile(
               title: const Text('Add Task'),
@@ -296,13 +315,15 @@ void _updateTaskList() {
                   color: task.isCompleted
                       ? const Color.fromARGB(255, 212, 179, 242)
                       : _isExpired(task.deadline)
-                          ? const Color.fromARGB(255, 255, 173, 173) // Expired task color
+                          ? const Color.fromARGB(
+                              255, 255, 173, 173) // Expired task color
                           : null,
                   margin: const EdgeInsets.symmetric(
                       vertical: 8.0, horizontal: 16.0),
                   child: ListTile(
                     title: Text(task.title),
-                    subtitle: Text('Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
+                    subtitle: Text(
+                        'Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
                     trailing: Wrap(
                       spacing: 12, // space between two icons
                       children: <Widget>[
@@ -332,8 +353,6 @@ void _updateTaskList() {
       ),
     );
   }
-
-  
 }
 
 // class HistoryScreen extends StatelessWidget {

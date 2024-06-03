@@ -33,13 +33,24 @@ class _FlashScreenState extends State<FlashScreen> {
     );
   }
 
-  @override
+@override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Center(
-        child: Text(
-          'Welcome to Task App',
-          style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Image.asset(
+              'assets/taskapp.png',
+              width: 100, // Adjust the width as needed
+              height: 100, // Adjust the height as needed
+            ),
+            const SizedBox(height: 20), // Add spacing between the image and text
+            const Text(
+              'Welcome to Task App',
+              style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
       ),
     );
