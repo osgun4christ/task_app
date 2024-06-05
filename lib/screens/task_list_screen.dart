@@ -1,3 +1,5 @@
+// ignore_for_file: avoid_print
+
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +10,15 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../database_helper.dart';
 import '../models/task.dart';
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  print('notification(${notificationResponse.id}) action tapped: '
+      '${notificationResponse.actionId} with payload: ${notificationResponse.payload}');
+  if (notificationResponse.input?.isNotEmpty ?? false) {
+    print('notification tapped with input: ${notificationResponse.input}');
+  }
+}
 
 class TaskListScreen extends StatefulWidget {
   final FlutterLocalNotificationsPlugin notificationsPlugin;
@@ -44,6 +55,27 @@ class _TaskListScreenState extends State<TaskListScreen> {
     return DateFormat('EEEE, MMM d').format(date);
   }
 
+  //Testing
+//   Future<void> _showTestNotification() async {
+//   const AndroidNotificationDetails androidPlatformChannelSpecifics =
+//       AndroidNotificationDetails(
+//     'test_channel', // ID
+//     'Test Channel', // Name
+//     channelDescription: 'This is a test channel',
+//     importance: Importance.max,
+//     priority: Priority.high,
+//   );
+//   const NotificationDetails platformChannelSpecifics =
+//       NotificationDetails(android: androidPlatformChannelSpecifics);
+//   await widget.notificationsPlugin.show(
+//     0, // Notification ID
+//     'Test Notification', // Title
+//     'This is a test notification', // Body
+//     platformChannelSpecifics,
+//     payload: 'Test Payload',
+//   );
+// }
+
   Future<void> _initializeNotifications() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -56,7 +88,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'task_reminders', // ID
       'Task Reminders', // Name
-      description: 'This channel is used for task reminders', // Description
+      description: 'Kindly be reminded of your pending task.', // Description
       importance: Importance.max,
     );
 
@@ -64,15 +96,14 @@ class _TaskListScreenState extends State<TaskListScreen> {
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
+
     await widget.notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         // handle the notification response
+        print('Foreground notification received: ${response.payload}');
       },
-      onDidReceiveBackgroundNotificationResponse:
-          (NotificationResponse response) {
-        // handle the background notification response
-      },
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
   }
 
@@ -138,23 +169,43 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 
   Future<void> _scheduleNotification(AppTask task) async {
-    await widget.notificationsPlugin.zonedSchedule(
-      task.id!,
-      'Task Reminder',
-      task.title,
-      tz.TZDateTime.from(task.deadline, tz.local),
-      const NotificationDetails(
-        android: AndroidNotificationDetails(
-          'task_reminders',
-          'Task Reminders',
-          importance: Importance.max,
-          priority: Priority.high,
+    final notificationTimes = _calculateNotificationTimes(task.deadline);
+
+    for (final scheduledTime in notificationTimes) {
+      await widget.notificationsPlugin.zonedSchedule(
+        task.id!, // Use a unique ID for each notification
+        'Task App Reminder', // Notification title
+        task.title, // Notification body
+        scheduledTime, // Scheduled time
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'task_reminders',
+            'Task Reminders',
+            importance: Importance.max,
+            priority: Priority.high,
+            sound: RawResourceAndroidNotificationSound('notification_sound'),
+          ),
         ),
-      ),
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.wallClockTime,
-    );
+        androidScheduleMode: AndroidScheduleMode.exact,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.wallClockTime,
+      );
+    }
+  }
+
+  List<tz.TZDateTime> _calculateNotificationTimes(DateTime deadline) {
+    final List<tz.TZDateTime> notificationTimes = [];
+    final now = tz.TZDateTime.now(tz.local);
+
+    for (int hoursBefore = 4; hoursBefore <= 24; hoursBefore += 4) {
+      final scheduledTime = tz.TZDateTime.from(deadline, tz.local)
+          .subtract(Duration(hours: hoursBefore));
+      if (scheduledTime.isAfter(now)) {
+        notificationTimes.add(scheduledTime);
+      }
+    }
+
+    return notificationTimes;
   }
 
   void _updateTaskList() {
@@ -185,7 +236,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   void _addOrEditTask(AppTask? task) {
     final titleController = TextEditingController(text: task?.title);
-
+  
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -223,10 +274,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
                     if (task == null) {
                       final newTask = AppTask(title: title, deadline: deadline);
-                      _dbHelper.insertTask(newTask).then((_) {
-                        _scheduleNotification(newTask);
-                        _updateTaskList();
-                      });
+                      await _dbHelper.insertTask(newTask);
+                      _scheduleNotification(newTask);
                     } else {
                       final updatedTask = AppTask(
                         id: task.id,
@@ -234,11 +283,10 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         deadline: deadline,
                         isCompleted: task.isCompleted,
                       );
-                      _dbHelper.updateTask(updatedTask).then((_) {
-                        _scheduleNotification(updatedTask);
-                        _updateTaskList();
-                      });
+                      await _dbHelper.updateTask(updatedTask);
+                      _scheduleNotification(updatedTask);
                     }
+                    _updateTaskList();
 
                     // ignore: use_build_context_synchronously
                     Navigator.pop(context);
@@ -375,6 +423,11 @@ class _TaskListScreenState extends State<TaskListScreen> {
             icon: const Icon(Icons.calendar_today),
             onPressed: _showCalendar,
           ),
+          //testing
+          //   IconButton(
+          //   icon: const Icon(Icons.notification_important),
+          //   onPressed: _showTestNotification, // Trigger test notification
+          // ),
         ],
       ),
       drawer: Drawer(
@@ -428,7 +481,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ),
       ),
       body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
