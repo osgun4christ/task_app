@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.VIBRATE" />
 <application>
     <receiver
         android:name="com.dexterous.flutterlocalnotifications.receivers.ActionReceiver"
@@ -11,13 +12,22 @@
     <receiver
         android:name="com.dexterous.flutterlocalnotifications.receivers.ScheduledNotificationReceiver"
         android:exported="true"/>
+    <receiver android:name="com.dexterous.flutterlocalnotifications.receivers.TimeZoneChangeReceiver" 
+        android:exported="true">
+        <intent-filter>
+            <action android:name="android.intent.action.TIMEZONE_CHANGED"/>
+        </intent-filter>
+    </receiver>
+    <receiver android:name="com.dexterous.flutterlocalnotifications.receivers.AlarmBroadcastReceiver" 
+        android:exported="true"/>
+    
     <receiver
         android:name="com.dexterous.flutterlocalnotifications.receivers.NotificationReceiver"
         android:exported="true"/>
 </application>
 
     <application
-        android:label="task_app"
+        android:label="Task App"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

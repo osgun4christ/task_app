@@ -105,6 +105,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       },
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
+    // Request notification permissions if not already granted
   }
 
   Future<void> _fetchAppVersion() async {
@@ -172,6 +173,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final notificationTimes = _calculateNotificationTimes(task.deadline);
 
     for (final scheduledTime in notificationTimes) {
+      print(
+          'Scheduling notification for task "${task.title}" at $scheduledTime');
       await widget.notificationsPlugin.zonedSchedule(
         task.id!, // Use a unique ID for each notification
         'Task App Reminder', // Notification title
@@ -204,7 +207,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
         notificationTimes.add(scheduledTime);
       }
     }
-
+    // ignore: avoid_function_literals_in_foreach_calls
+    notificationTimes
+        .forEach((time) => print('Calculated notification time: $time'));
     return notificationTimes;
   }
 
@@ -236,7 +241,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   void _addOrEditTask(AppTask? task) {
     final titleController = TextEditingController(text: task?.title);
-  
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -269,7 +274,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
                     if (pickedDate != null) {
                       deadline = DateTime(
-                          pickedDate.year, pickedDate.month, pickedDate.day);
+                        pickedDate.year,
+                        pickedDate.month,
+                        pickedDate.day,
+                        deadline.hour,
+                        deadline.minute,
+                      );
                     }
 
                     if (task == null) {
