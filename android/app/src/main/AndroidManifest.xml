@@ -1,4 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+<application>
+    <receiver
+        android:name="com.dexterous.flutterlocalnotifications.receivers.ActionReceiver"
+        android:exported="true"/>
+    <receiver
+        android:name="com.dexterous.flutterlocalnotifications.receivers.DismissedReceiver"
+        android:exported="true"/>
+    <receiver
+        android:name="com.dexterous.flutterlocalnotifications.receivers.ScheduledNotificationReceiver"
+        android:exported="true"/>
+    <receiver
+        android:name="com.dexterous.flutterlocalnotifications.receivers.NotificationReceiver"
+        android:exported="true"/>
+</application>
+
     <application
         android:label="task_app"
         android:name="${applicationName}"

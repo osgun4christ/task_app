@@ -1,19 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../database_helper.dart';
-import '../models/task.dart';
+import 'package:task_app/database_helper.dart';
+import 'package:task_app/models/task.dart';
 
-class TaskHistoryScreen extends StatefulWidget {
-  const TaskHistoryScreen({super.key});
+class HistoryScreen extends StatefulWidget {
+  const HistoryScreen({super.key});
 
   @override
   // ignore: library_private_types_in_public_api
-  _TaskHistoryScreenState createState() => _TaskHistoryScreenState();
+  _HistoryScreenState createState() => _HistoryScreenState();
 }
 
-class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
+class _HistoryScreenState extends State<HistoryScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -21,7 +21,7 @@ class _TaskHistoryScreenState extends State<TaskHistoryScreen> {
         title: const Text('Task History'),
       ),
       body: FutureBuilder<List<AppTask>>(
-        future: _dbHelper .getCompletedTasks(),
+        future: _dbHelper.getCompletedTasks(),
         builder: (BuildContext context, AsyncSnapshot<List<AppTask>> snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());

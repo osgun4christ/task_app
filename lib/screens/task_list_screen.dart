@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:task_app/screens/calendar_screen.dart';
 import 'package:task_app/screens/history_screen.dart';
-//import 'package:task_app/screens/history_screen.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../database_helper.dart';
 import '../models/task.dart';
@@ -25,17 +26,18 @@ class TaskListScreen extends StatefulWidget {
 class _TaskListScreenState extends State<TaskListScreen> {
   final DatabaseHelper _dbHelper = DatabaseHelper.instance;
   late List<AppTask> _taskList = [];
-  final String _userName =
-      "Samuel"; // Static for simplicity, you can make this dynamic
+  late String _userName = '';
   late String _currentDate;
+  late String _appVersion;
 
   @override
   void initState() {
     super.initState();
     _initializeNotifications();
-    _archiveOldCompletedTasks();
     _updateTaskList();
     _currentDate = _getCurrentDate(widget.initialDate);
+    _fetchAppVersion(); // Fetch the app version
+    _fetchUserName(); // Fetch the user name
   }
 
   String _getCurrentDate(DateTime date) {
@@ -45,8 +47,23 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _initializeNotifications() async {
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
+
     const InitializationSettings initializationSettings =
-        InitializationSettings(android: initializationSettingsAndroid);
+        InitializationSettings(
+      android: initializationSettingsAndroid,
+    );
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'task_reminders', // ID
+      'Task Reminders', // Name
+      description: 'This channel is used for task reminders', // Description
+      importance: Importance.max,
+    );
+
+    await widget.notificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
     await widget.notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
@@ -55,6 +72,67 @@ class _TaskListScreenState extends State<TaskListScreen> {
       onDidReceiveBackgroundNotificationResponse:
           (NotificationResponse response) {
         // handle the background notification response
+      },
+    );
+  }
+
+  Future<void> _fetchAppVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        _appVersion = packageInfo.version;
+      });
+    } catch (e) {
+      // Handle the error, if any
+      // print('Failed to get app version: $e');
+    }
+  }
+
+  Future<void> _fetchUserName() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _userName = prefs.getString('username') ?? 'User';
+    });
+  }
+
+  Future<void> _saveUserName(String userName) async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setString('username', userName);
+    setState(() {
+      _userName = userName;
+    });
+  }
+
+  Future<void> _promptForUserName() async {
+    final TextEditingController nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Enter your name'),
+          content: TextField(
+            controller: nameController,
+            decoration: const InputDecoration(hintText: 'Your Name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final String userName = nameController.text;
+                if (userName.isNotEmpty) {
+                  _saveUserName(userName);
+                }
+                Navigator.of(context).pop();
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
       },
     );
   }
@@ -77,10 +155,6 @@ class _TaskListScreenState extends State<TaskListScreen> {
       uiLocalNotificationDateInterpretation:
           UILocalNotificationDateInterpretation.wallClockTime,
     );
-  }
-
-  Future<void> _archiveOldCompletedTasks() async {
-    await _dbHelper.archiveOldCompletedTasks();
   }
 
   void _updateTaskList() {
@@ -223,7 +297,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void _showHistory() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const TaskHistoryScreen()),
+      MaterialPageRoute(builder: (context) => const HistoryScreen()),
     );
   }
 
@@ -239,6 +313,45 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
   void _showAddTask() {
     _addOrEditTask(null);
+  }
+
+  void _showAboutAppDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('About Task App'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text(
+                'Task App helps you manage your daily tasks efficiently and reminds you about them with notifications. You can add, edit, and delete tasks, and view your task history and calendar.',
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Version: $_appVersion',
+                style: const TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Developed by: Osgun4christ',
+                style: TextStyle(fontSize: 16),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   bool _isExpired(DateTime deadline) {
@@ -265,7 +378,8 @@ class _TaskListScreenState extends State<TaskListScreen> {
         ],
       ),
       drawer: Drawer(
-        width: MediaQuery.of(context).size.width * 0.65, // Adjust the width as needed
+        width: MediaQuery.of(context).size.width *
+            0.65, // Adjust the width as needed
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -286,64 +400,106 @@ class _TaskListScreenState extends State<TaskListScreen> {
               ),
             ),
             ListTile(
+              leading: const Icon(Icons.add_circle),
               title: const Text('Add Task'),
               onTap: _showAddTask,
             ),
             ListTile(
+              leading: const Icon(Icons.history),
               title: const Text('Task History'),
               onTap: _showHistory,
             ),
             ListTile(
+              leading: const Icon(Icons.calendar_today),
               title: const Text('Calendar'),
               onTap: _showCalendar,
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Edit User Name'),
+              onTap: _promptForUserName,
+            ),
+            ListTile(
+              leading: const Icon(Icons.info),
+              title: const Text('About'),
+              onTap: _showAboutAppDialog,
             ),
           ],
         ),
       ),
       body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Text('Welcome, $_userName! Today is $_currentDate'),
+            child: Column(
+              children: [
+                Text(
+                  'Welcome, $_userName!',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color.fromARGB(255, 92, 42, 139),
+                  ),
+                ),
+                Text(
+                  'Today is $_currentDate',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    color: Color.fromARGB(255, 92, 42, 139),
+                  ),
+                ),
+              ],
+            ),
           ),
           Expanded(
-            child: ListView.builder(
-              itemCount: _taskList.length,
-              itemBuilder: (BuildContext context, int index) {
-                final task = _taskList[index];
-                return Card(
-                  color: task.isCompleted
-                      ? const Color.fromARGB(255, 212, 179, 242)
-                      : _isExpired(task.deadline)
-                          ? const Color.fromARGB(
-                              255, 255, 173, 173) // Expired task color
-                          : null,
-                  margin: const EdgeInsets.symmetric(
-                      vertical: 8.0, horizontal: 16.0),
-                  child: ListTile(
-                    title: Text(task.title),
-                    subtitle: Text(
-                        'Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
-                    trailing: Wrap(
-                      spacing: 12, // space between two icons
-                      children: <Widget>[
-                        Checkbox(
-                          value: task.isCompleted,
-                          onChanged: (bool? value) {
-                            _markAsCompleted(task);
-                          },
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _deleteTask(task),
-                        ),
-                      ],
+            child: _taskList.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(25.0),
+                    child: Center(
+                      child: Text(
+                        'No tasks for today? Add one to keep your day organized!',
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ),
                     ),
-                    onTap: () => _addOrEditTask(task),
+                  )
+                : ListView.builder(
+                    itemCount: _taskList.length,
+                    itemBuilder: (BuildContext context, int index) {
+                      final task = _taskList[index];
+                      return Card(
+                        color: task.isCompleted
+                            ? const Color.fromARGB(255, 212, 179, 242)
+                            : _isExpired(task.deadline)
+                                ? const Color.fromARGB(
+                                    255, 255, 173, 173) // Expired task color
+                                : null,
+                        margin: const EdgeInsets.symmetric(
+                            vertical: 8.0, horizontal: 16.0),
+                        child: ListTile(
+                          title: Text(task.title),
+                          subtitle: Text(
+                              'Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
+                          trailing: Wrap(
+                            spacing: 12, // space between two icons
+                            children: <Widget>[
+                              Checkbox(
+                                value: task.isCompleted,
+                                onChanged: (bool? value) {
+                                  _markAsCompleted(task);
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete),
+                                onPressed: () => _deleteTask(task),
+                              ),
+                            ],
+                          ),
+                          onTap: () => _addOrEditTask(task),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
         ],
       ),
