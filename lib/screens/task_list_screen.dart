@@ -200,7 +200,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
     final List<tz.TZDateTime> notificationTimes = [];
     final now = tz.TZDateTime.now(tz.local);
 
-    for (int hoursBefore = 4; hoursBefore <= 24; hoursBefore += 4) {
+    for (int hoursBefore = 3; hoursBefore <= 24; hoursBefore += 3) {
       final scheduledTime = tz.TZDateTime.from(deadline, tz.local)
           .subtract(Duration(hours: hoursBefore));
       if (scheduledTime.isAfter(now)) {
@@ -282,6 +282,33 @@ class _TaskListScreenState extends State<TaskListScreen> {
                       );
                     }
 
+                    //New addition to add time start here
+                    // onPressed: () async {
+                    //   final title = titleController.text;
+                    //   DateTime deadline = task?.deadline ?? DateTime.now();
+
+                    //   final DateTime? picked = await showDatePicker(
+                    //     context: context,
+                    //     initialDate: task?.deadline ?? DateTime.now(),
+                    //     firstDate: DateTime.now(),
+                    //     lastDate: DateTime(DateTime.now().year + 5),
+                    //   );
+                    //   if (picked != null) {
+                    //     final TimeOfDay? timePicked = await showTimePicker(
+                    //       // ignore: use_build_context_synchronously
+                    //       context: context,
+                    //       initialTime: TimeOfDay.now(),
+                    //     );
+                    //     if (timePicked != null) {
+                    //       setState(() {
+                    //         task?.deadline = DateTime(picked.year, picked.month,
+                    //             picked.day, timePicked.hour, timePicked.minute);
+                    //       });
+                    //     }
+
+                    // }
+                    //New addition to add time ends here
+
                     if (task == null) {
                       final newTask = AppTask(title: title, deadline: deadline);
                       await _dbHelper.insertTask(newTask);
@@ -303,6 +330,12 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   },
                   child: Text(task == null ? 'Add Task' : 'Edit Task'),
                 ),
+
+                // ElevatedButton(
+
+                //   },
+                //   child: const Text('Select Deadline'),
+                // ),
               ],
             ),
           ),
@@ -575,66 +608,3 @@ class _TaskListScreenState extends State<TaskListScreen> {
   }
 }
 
-// class HistoryScreen extends StatelessWidget {
-//   const HistoryScreen({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Task History'),
-//       ),
-//       body: FutureBuilder<List<AppTask>>(
-//         future: DatabaseHelper.instance.getCompletedTasks(),
-//         builder: (BuildContext context, AsyncSnapshot<List<AppTask>> snapshot) {
-//           if (!snapshot.hasData) {
-//             return const Center(child: CircularProgressIndicator());
-//           }
-//           if (snapshot.data!.isEmpty) {
-//             return const Center(child: Text('No completed tasks.'));
-//           }
-//           return ListView(
-//             children: snapshot.data!.map((task) {
-//               return ListTile(
-//                 title: Text(task.title),
-//                 subtitle: Text('Completed on: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
-//               );
-//             }).toList(),
-//           );
-//         },
-//       ),
-//     );
-//   }
-// }
-
-// class CalendarScreen extends StatelessWidget {
-//   const CalendarScreen({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: const Text('Calendar'),
-//       ),
-//       body: FutureBuilder<List<AppTask>>(
-//         future: DatabaseHelper.instance.getTaskList(),
-//         builder: (BuildContext context, AsyncSnapshot<List<AppTask>> snapshot) {
-//           if (!snapshot.hasData) {
-//             return const Center(child: CircularProgressIndicator());
-//           }
-//           if (snapshot.data!.isEmpty) {
-//             return const Center(child: Text('No tasks found.'));
-//           }
-//           return ListView(
-//             children: snapshot.data!.map((task) {
-//               return ListTile(
-//                 title: Text(task.title),
-//                 subtitle: Text('Deadline: ${DateFormat('yyyy-MM-dd').format(task.deadline)}'),
-//               );
-//             }).toList(),
-//           );
-//         },
-//       ),
-//     );
-//   }
-// }
