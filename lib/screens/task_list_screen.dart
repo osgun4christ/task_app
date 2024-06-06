@@ -261,7 +261,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
     for (int hoursBefore = 0; hoursBefore <= 24; hoursBefore += 4) {
       final scheduledTime = tz.TZDateTime.from(deadline, tz.local)
-          .add(Duration(hours: hoursBefore));
+          .add(Duration(minutes: hoursBefore));
       print('Scheduled time calculated: $scheduledTime');
       if (scheduledTime.isAfter(now)) {
         notificationTimes.add(scheduledTime);
@@ -470,44 +470,52 @@ class _TaskListScreenState extends State<TaskListScreen> {
     _addOrEditTask(null);
   }
 
-  void _showAboutAppDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('About Task App'),
-          content: Column(
+void _showAboutAppDialog() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text('About Task App'),
+        content: SingleChildScrollView(
+          child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const Text(
-                'Task App helps you manage your daily tasks efficiently and reminds you about them with notifications. You can add, edit, and delete tasks, and view your task history and calendar.',
+                'Welcome to Task App!\n\n'
+                'Task App helps you manage your daily tasks efficiently and stay organized.\n\n'
+                'Key Features:\n'
+                '- Easy task management: Add, edit, and delete tasks\n'
+                '- Timely notifications: Get reminders for your tasks\n'
+                '- Task history: View completed tasks\n'
+                '- Calendar integration: Plan your days effectively\n'
+                '- Personalized experience: Save your username\n\n'
+                ,
                 style: TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 16),
               Text(
-                'Version: $_appVersion',
-                style: const TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Developed by: Osgun4christ',
-                style: TextStyle(fontSize: 16),
-              ),
+                'Version: $_appVersion',),
+                const SizedBox(height: 16),
+              const Text('Developed by: Osgun4christ\n\n'
+                'Thank you for choosing Task App to help organize your life. We are committed to continuously improving the app. Feel free to reach out with feedback or suggestions.\n\n'
+                'Stay organized, stay productive!',)
             ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: const Text('Close'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 
   bool _isExpired(DateTime deadline) {
     final now = DateTime.now();
