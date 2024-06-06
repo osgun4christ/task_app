@@ -14,34 +14,45 @@ void backgroundNotificationHandler(NotificationResponse notificationResponse) {
   print('Background notification received: ${notificationResponse.payload}');
 }
 
-Future<void> main() async{  
+Future<void> main() async {
   // Ensure WidgetsFlutterBinding is initialized
   WidgetsFlutterBinding.ensureInitialized();
   tz.initializeTimeZones();
   runApp(TaskApp());
 }
 
-
 class TaskApp extends StatelessWidget {
-  final FlutterLocalNotificationsPlugin _notificationsPlugin = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
 
-  TaskApp({super.key}){
+  TaskApp({super.key}) {
     _initializeNotifications();
   }
 
   Future<void> _initializeNotifications() async {
-    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+    print('Initializing notifications...');
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings =
+        InitializationSettings(android: initializationSettingsAndroid);
 
-    await _notificationsPlugin.initialize(
+    final initialized = await _notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         // Handle the notification response here (if app is in foreground)
         print('Foreground notification received: ${response.payload}');
+        
       },
-      onDidReceiveBackgroundNotificationResponse: backgroundNotificationHandler, // Register the background handler
+      onDidReceiveBackgroundNotificationResponse:
+          backgroundNotificationHandler, // Register the background handler
     );
+        if (initialized == true) {
+      print('Notifications plugin initialized successfully.');
+    } else {
+      print('Failed to initialize notifications plugin.');
+    }
   }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

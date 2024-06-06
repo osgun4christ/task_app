@@ -1,5 +1,4 @@
 // ignore_for_file: avoid_print
-
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
@@ -10,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../database_helper.dart';
 import '../models/task.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 @pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) {
@@ -45,6 +45,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
   void initState() {
     super.initState();
     _initializeNotifications();
+    _requestExactAlarmPermission();
     _updateTaskList();
     _currentDate = _getCurrentDate(widget.initialDate);
     _fetchAppVersion(); // Fetch the app version
@@ -91,21 +92,55 @@ class _TaskListScreenState extends State<TaskListScreen> {
       description: 'Kindly be reminded of your pending task.', // Description
       importance: Importance.max,
     );
-
     await widget.notificationsPlugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
 
-    await widget.notificationsPlugin.initialize(
+    final bool? initialized = await widget.notificationsPlugin.initialize(
       initializationSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
-        // handle the notification response
         print('Foreground notification received: ${response.payload}');
       },
       onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
     );
+
+    if (initialized == true) {
+      print('Notifications plugin initialized successfully.');
+    } else {
+      print('Failed to initialize notifications plugin.');
+    }
+
+//original
+    // await widget.notificationsPlugin
+    //     .resolvePlatformSpecificImplementation<
+    //         AndroidFlutterLocalNotificationsPlugin>()
+    //     ?.createNotificationChannel(channel);
+
+    // await widget.notificationsPlugin.initialize(
+    //   initializationSettings,
+    //   onDidReceiveNotificationResponse: (NotificationResponse response) {
+    //     // handle the notification response
+    //     print('Foreground notification received: ${response.payload}');
+    //   },
+    //   onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+    // );
     // Request notification permissions if not already granted
+  }
+
+  Future<void> _requestExactAlarmPermission() async {
+    if (await Permission.scheduleExactAlarm.isGranted) {
+      print('Exact alarm permission already granted.');
+    } else {
+      print('Requesting exact alarm permission.');
+      PermissionStatus status = await Permission.scheduleExactAlarm.request();
+      if (status.isGranted) {
+        print('Exact alarm permission granted.');
+      } else {
+        print('Exact alarm permission denied.');
+        // Handle the case where the permission is denied
+      }
+    }
   }
 
   Future<void> _fetchAppVersion() async {
@@ -116,7 +151,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
       });
     } catch (e) {
       // Handle the error, if any
-      // print('Failed to get app version: $e');
+      print('Failed to get app version: $e');
     }
   }
 
@@ -172,44 +207,70 @@ class _TaskListScreenState extends State<TaskListScreen> {
   Future<void> _scheduleNotification(AppTask task) async {
     final notificationTimes = _calculateNotificationTimes(task.deadline);
 
+    if (widget.notificationsPlugin == null) {
+      print('Error: notificationsPlugin is null');
+      return;
+    }
+
     for (final scheduledTime in notificationTimes) {
-      print(
-          'Scheduling notification for task "${task.title}" at $scheduledTime');
-      await widget.notificationsPlugin.zonedSchedule(
-        task.id!, // Use a unique ID for each notification
-        'Task App Reminder', // Notification title
-        task.title, // Notification body
-        scheduledTime, // Scheduled time
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'task_reminders',
-            'Task Reminders',
-            importance: Importance.max,
-            priority: Priority.high,
-            sound: RawResourceAndroidNotificationSound('notification_sound'),
+      try {
+        print(
+            'Scheduling notification for task "${task.title}" at $scheduledTime');
+        final androidFlutterLocalNotificationsPlugin =
+            widget.notificationsPlugin.resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>();
+        if (androidFlutterLocalNotificationsPlugin == null) {
+          print('Error: AndroidFlutterLocalNotificationsPlugin is null');
+          return;
+        }
+
+        if (task.id == null) {
+          print('Error: Task ID is null for task "${task.title}"');
+          return;
+        }
+        await widget.notificationsPlugin.zonedSchedule(
+          task.id!, // Use a unique ID for each notification
+          'Task Reminder', // Notification title
+          task.title, // Notification body
+          scheduledTime, // Scheduled time
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              'task_reminders',
+              'Task Reminders',
+              importance: Importance.max,
+              priority: Priority.high,
+              sound: RawResourceAndroidNotificationSound('notification_sound'),
+            ),
           ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exact,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.wallClockTime,
-      );
+          androidScheduleMode: AndroidScheduleMode.exact,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.wallClockTime,
+        );
+        print('Notification scheduled successfully for ${task.title} at $scheduledTime');
+      } catch (e, stackTrace) {
+        print('Error scheduling notification ${task.title} at $scheduledTime: $e');
+        print('StackTrace: $stackTrace');
+      }
     }
   }
 
   List<tz.TZDateTime> _calculateNotificationTimes(DateTime deadline) {
     final List<tz.TZDateTime> notificationTimes = [];
     final now = tz.TZDateTime.now(tz.local);
+    print('Current time: $now');
 
-    for (int hoursBefore = 3; hoursBefore <= 24; hoursBefore += 3) {
+    for (int hoursBefore = 0; hoursBefore <= 24; hoursBefore += 4) {
       final scheduledTime = tz.TZDateTime.from(deadline, tz.local)
-          .subtract(Duration(hours: hoursBefore));
+          .add(Duration(hours: hoursBefore));
+      print('Scheduled time calculated: $scheduledTime');
       if (scheduledTime.isAfter(now)) {
         notificationTimes.add(scheduledTime);
       }
     }
     // ignore: avoid_function_literals_in_foreach_calls
-    notificationTimes
-        .forEach((time) => print('Calculated notification time: $time'));
+    for (var time in notificationTimes) {
+      print('Calculated notification time: $time');
+    }
     return notificationTimes;
   }
 
@@ -264,6 +325,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                   onPressed: () async {
                     final title = titleController.text;
                     DateTime deadline = task?.deadline ?? DateTime.now();
+                    print('Initial deadline: $deadline');
 
                     final DateTime? pickedDate = await showDatePicker(
                       context: context,
@@ -280,6 +342,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         deadline.hour,
                         deadline.minute,
                       );
+                      print('Picked date:$pickedDate');
                     }
 
                     //New addition to add time start here
@@ -311,8 +374,9 @@ class _TaskListScreenState extends State<TaskListScreen> {
 
                     if (task == null) {
                       final newTask = AppTask(title: title, deadline: deadline);
-                      await _dbHelper.insertTask(newTask);
-                      _scheduleNotification(newTask);
+                      final taskId = await _dbHelper.insertTask(newTask); // Ensure ID is retrieved here
+                      newTask.id = taskId;
+                      await _scheduleNotification(newTask);
                     } else {
                       final updatedTask = AppTask(
                         id: task.id,
@@ -321,7 +385,7 @@ class _TaskListScreenState extends State<TaskListScreen> {
                         isCompleted: task.isCompleted,
                       );
                       await _dbHelper.updateTask(updatedTask);
-                      _scheduleNotification(updatedTask);
+                      await _scheduleNotification(updatedTask);
                     }
                     _updateTaskList();
 
@@ -607,4 +671,3 @@ class _TaskListScreenState extends State<TaskListScreen> {
     );
   }
 }
-

@@ -36,9 +36,10 @@ class DatabaseHelper {
     ''');
   }
 
-  Future<void> insertTask(AppTask task) async {
+  Future<int> insertTask(AppTask task) async {
     final db = await instance.database;
-    await db.insert('tasks', task.toMap());
+    final id = await db.insert('tasks', task.toMap());
+    return id;
   }
 
   Future<void> updateTask(AppTask task) async {
